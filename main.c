@@ -8,13 +8,12 @@
 #include <stdbool.h>
  
 #define DATA_BLUETOOTH_SUCCESS 1
-#define DATA_ALL_LED_OFF 2
-#define DATA_RED_LED_ON 3
-#define DATA_RED_LED_OFF 4
-#define DATA_BLUE_LED_ON 5
-#define DATA_BLUE_LED_OFF 6
-#define DATA_GREEN_LED_ON 7
-#define DATA_GREEN_LED_OFF 8
+#define DATA_BLUETOOTH_DISCONNECT 2
+#define UP 3
+#define DOWN 4
+#define LEFT 5 //curved left
+#define RIGHT 6 //curve right
+#define END 7
 
 #define PTB0_Pin 0
 #define PTB1_Pin 1
@@ -39,12 +38,33 @@
 #define MASK(x) (1 << (x))
 #define SW_POS 6
 
+#define RED_LED_1 5 // PortE Pin 5
+#define RED_LED_2 4 // PortE Pin 4
+#define RED_LED_3 3 // PortE Pin 3
+#define RED_LED_4 2 // PortE Pin 2
+#define RED_LED_5 11 // PortB Pin 11
+#define RED_LED_6 10 // PortB Pin 10
+#define RED_LED_7 9 // PortB Pin 9
+#define RED_LED_8 8 // PortB Pin 8
+#define GREEN_LED_1 7 // PortC Pin 7
+#define GREEN_LED_2 0 // PortC Pin 0
+#define GREEN_LED_3 3 // PortC Pin 3
+#define GREEN_LED_4 4 // PortC Pin 4
+#define GREEN_LED_5 5 // PortC Pin 5
+#define GREEN_LED_6 6 // PortC Pin 6
+#define GREEN_LED_7 10 // PortC Pin 10
+#define GREEN_LED_8 11 // PortC Pin 11
+
+
 enum color_t{red, green, blue};
 enum led_state{led_on, led_off};
-volatile uint8_t rx_data;
+enum motion_state{stationary, up, down, left, right};
 
+volatile uint8_t rx_data;
 volatile bool is_connected = false;
 volatile bool has_started = false;
+volatile enum motion_state curr_motion_state = stationary;
+
 
 /* Init UART2 */
 void initUART2(uint32_t baud_rate) {
@@ -116,89 +136,139 @@ uint8_t UART2_Receive_Poll(void) {
 	return (UART2->D);
 }
 
-/* Delay routine */
-static void delay(volatile uint32_t nof) {
-	while(nof!=0) {
-		__asm("NOP");
-		nof--;
-	}
-}
-
 /*-------- LED CODE -----------------------------------------------------------
 ------------------------------------------------------------------------------*/
 
 void initLED(void) {
 	
-	// Enable Clock to PORTB and PORTD
-	SIM->SCGC5 |= ((SIM_SCGC5_PORTB_MASK) | (SIM_SCGC5_PORTD_MASK));
+	// Enable Clock to PORTB, PORTC and PORTE
+	SIM->SCGC5 |= ((SIM_SCGC5_PORTB_MASK) | (SIM_SCGC5_PORTC_MASK) | (SIM_SCGC5_PORTE_MASK));
 	
-	// Configure MUX settings to make all 3 pins GPIO
-	PORTB->PCR[RED_LED] &= ~PORT_PCR_MUX_MASK;
-	PORTB->PCR[RED_LED] |= PORT_PCR_MUX(1);
+	// Configure MUX settings to make all 16 pins GPIO
+	PORTE->PCR[RED_LED_1] &= ~PORT_PCR_MUX_MASK;
+	PORTE->PCR[RED_LED_1] |= PORT_PCR_MUX(1);
 	
-	PORTB->PCR[GREEN_LED] &= ~PORT_PCR_MUX_MASK;
-	PORTB->PCR[GREEN_LED] |= PORT_PCR_MUX(1);
+	PORTE->PCR[RED_LED_2] &= ~PORT_PCR_MUX_MASK;
+	PORTE->PCR[RED_LED_2] |= PORT_PCR_MUX(1);
 	
-	PORTD->PCR[BLUE_LED] &= ~PORT_PCR_MUX_MASK;
-	PORTD->PCR[BLUE_LED] |= PORT_PCR_MUX(1);
+	PORTE->PCR[RED_LED_3] &= ~PORT_PCR_MUX_MASK;
+	PORTE->PCR[RED_LED_3] |= PORT_PCR_MUX(1);
+	
+	PORTE->PCR[RED_LED_4] &= ~PORT_PCR_MUX_MASK;
+	PORTE->PCR[RED_LED_4] |= PORT_PCR_MUX(1);
+	
+	PORTB->PCR[RED_LED_5] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[RED_LED_5] |= PORT_PCR_MUX(1);
+	
+	PORTB->PCR[RED_LED_6] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[RED_LED_6] |= PORT_PCR_MUX(1);
+	
+	PORTB->PCR[RED_LED_7] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[RED_LED_7] |= PORT_PCR_MUX(1);
+	
+	PORTB->PCR[RED_LED_8] &= ~PORT_PCR_MUX_MASK;
+	PORTB->PCR[RED_LED_8] |= PORT_PCR_MUX(1);
+	
+	PORTC->PCR[GREEN_LED_1] &= ~PORT_PCR_MUX_MASK;
+	PORTC->PCR[GREEN_LED_1] |= PORT_PCR_MUX(1);
+	
+	PORTC->PCR[GREEN_LED_2] &= ~PORT_PCR_MUX_MASK;
+	PORTC->PCR[GREEN_LED_2] |= PORT_PCR_MUX(1);
+	
+	PORTC->PCR[GREEN_LED_3] &= ~PORT_PCR_MUX_MASK;
+	PORTC->PCR[GREEN_LED_3] |= PORT_PCR_MUX(1);
+	
+	PORTC->PCR[GREEN_LED_4] &= ~PORT_PCR_MUX_MASK;
+	PORTC->PCR[GREEN_LED_4] |= PORT_PCR_MUX(1);
+	
+	PORTC->PCR[GREEN_LED_5] &= ~PORT_PCR_MUX_MASK;
+	PORTC->PCR[GREEN_LED_5] |= PORT_PCR_MUX(1);
+	
+	PORTC->PCR[GREEN_LED_6] &= ~PORT_PCR_MUX_MASK;
+	PORTC->PCR[GREEN_LED_6] |= PORT_PCR_MUX(1);
+	
+	PORTC->PCR[GREEN_LED_7] &= ~PORT_PCR_MUX_MASK;
+	PORTC->PCR[GREEN_LED_7] |= PORT_PCR_MUX(1);
+	
+	PORTC->PCR[GREEN_LED_8] &= ~PORT_PCR_MUX_MASK;
+	PORTC->PCR[GREEN_LED_8] |= PORT_PCR_MUX(1);
 	
 	// Set Data Direction Registers for PortB and PortD
-	PTB->PDDR |= (MASK(RED_LED) | MASK(GREEN_LED));
-	PTD->PDDR |= MASK(BLUE_LED);
+	PTB->PDDR |= (MASK(RED_LED_5) | MASK(RED_LED_6) | MASK(RED_LED_7) | MASK(RED_LED_8));
+	PTE->PDDR |= (MASK(RED_LED_1) | MASK(RED_LED_2) | MASK(RED_LED_3) | MASK(RED_LED_4));
+	PTC->PDDR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
 }
 
-void on_red() {
-	PTB->PCOR = MASK(RED_LED);
+void single_green_led_on(int led_pos) {
+	switch (led_pos) {
+		case 1:
+			PTC->PCOR |= (MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
+			PTC->PSOR |= (MASK(GREEN_LED_1));
+			break;
+		case 2:
+			PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
+			PTC->PSOR |= (MASK(GREEN_LED_2));
+			break;
+		case 3:
+			PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
+			PTC->PSOR |= (MASK(GREEN_LED_3));
+			break;
+		case 4:
+			PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
+			PTC->PSOR |= (MASK(GREEN_LED_4));
+			break;
+		case 5:
+			PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
+			PTC->PSOR |= (MASK(GREEN_LED_5));
+			break;
+		case 6:
+			PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
+			PTC->PSOR |= (MASK(GREEN_LED_6));
+			break;
+		case 7:
+			PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_8));
+			PTC->PSOR |= (MASK(GREEN_LED_7));
+			break;
+		case 8:
+			PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7));
+			PTC->PSOR |= (MASK(GREEN_LED_8));
+			break;	
+	}
 }
 
-void on_blue() {
-	PTD->PCOR = MASK(BLUE_LED);
+void all_green_led_on() {
+	PTC->PSOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
 }
 
-void on_green() {
-	PTB->PCOR = MASK(GREEN_LED);
-}
-
-void off_red() {
-	PTB->PSOR = MASK(RED_LED);
-}
-
-void off_blue() {
-	PTD->PSOR = MASK(BLUE_LED);
-}
-
-void off_green() {
-	PTB->PSOR = MASK(GREEN_LED);
-}
-
-void led_control(enum color_t color, enum led_state state) {
-	if (color == red) {
-		if (state == led_on) {
-			on_red();
-		} else {
-			off_red();
-		}
-	} else if (color == green) {
-		if (state == led_on) {
-			on_green();
-		} else {
-			off_green();
-		}
-		
-	} else if (color == blue) {
-		if (state == led_on) {
-			on_blue();
-		} else {
-			off_blue();
+void green_led_flashing() {
+	int green_led_pos = 1;
+	while (curr_motion_state != stationary) {
+		single_green_led_on(green_led_pos);
+		osDelay(250);
+		green_led_pos++;
+		if (green_led_pos >= 9) {
+			break;
 		}
 	}
 }
 
-void offRGB() {
-	off_red();
-	off_blue();
-	off_green();
+void all_red_led_flashing_stationary() {
+	PTB->PSOR |= (MASK(RED_LED_5) | MASK(RED_LED_6) | MASK(RED_LED_7) | MASK(RED_LED_8));
+	PTE->PSOR |= (MASK(RED_LED_1) | MASK(RED_LED_2) | MASK(RED_LED_3) | MASK(RED_LED_4));
+	osDelay(250);
+	PTB->PCOR |= (MASK(RED_LED_5) | MASK(RED_LED_6) | MASK(RED_LED_7) | MASK(RED_LED_8));
+	PTE->PCOR |= (MASK(RED_LED_1) | MASK(RED_LED_2) | MASK(RED_LED_3) | MASK(RED_LED_4));
+	osDelay(250);
 }
+
+void all_red_led_flashing_running() {
+	PTB->PSOR |= (MASK(RED_LED_5) | MASK(RED_LED_6) | MASK(RED_LED_7) | MASK(RED_LED_8));
+	PTE->PSOR |= (MASK(RED_LED_1) | MASK(RED_LED_2) | MASK(RED_LED_3) | MASK(RED_LED_4));
+	osDelay(500);
+	PTB->PCOR |= (MASK(RED_LED_5) | MASK(RED_LED_6) | MASK(RED_LED_7) | MASK(RED_LED_8));
+	PTE->PCOR |= (MASK(RED_LED_1) | MASK(RED_LED_2) | MASK(RED_LED_3) | MASK(RED_LED_4));
+	osDelay(500);
+}	
 
 
 int calc_MOD(int freq, int prescaler) {
@@ -340,25 +410,49 @@ void initPWM(void) {
 void tBrain (void *argument) {
 	for (;;) {		
 		/* Rx and Tx */
-		if (rx_data == DATA_RED_LED_ON) {
-			led_control(red, led_on);
-		} else if (rx_data == DATA_ALL_LED_OFF) {
-			offRGB();
-		} else if (rx_data == DATA_RED_LED_OFF) {
-			led_control(red, led_off);
-		} else if (rx_data == DATA_BLUETOOTH_SUCCESS) {
-			
+		if (rx_data == DATA_BLUETOOTH_SUCCESS) {
+			is_connected = true;
 		//delay(0x80000);
+		} else if (rx_data == DATA_BLUETOOTH_DISCONNECT) {
+			is_connected = false;
+		} else if (rx_data == UP) {
+			
+		} else if (rx_data == DOWN) {
+			
+		} else if (rx_data == LEFT) {
+			
+		} else if (rx_data == RIGHT) {
+			
+		} else if (rx_data == END) {
+			
 		}
 	}  
 }
 
 void tMotorControl (void *argument) {
-	
+	for (;;) {
+		
+	}
 }
 
-void tLED (void *argument) {
-	
+void tGreenLED (void *argument) {
+	for (;;) {
+		if (curr_motion_state == stationary) {
+			all_green_led_on();
+		} else if (curr_motion_state != stationary) {
+			green_led_flashing();
+		}
+	}
+}
+
+void tRedLED (void *argument) {
+	for (;;) {
+		if (curr_motion_state == stationary) {
+			all_red_led_flashing_stationary();
+		} else if (curr_motion_state != stationary) {
+			all_red_led_flashing_running(); 
+		}
+	}
 }
 
 void tAudio (void *argument) {
@@ -379,18 +473,20 @@ void tAudio (void *argument) {
 int main (void) {
  
   // System Initialization
-  SystemCoreClockUpdate();
+	SystemCoreClockUpdate();
 	initUART2(BAUD_RATE);
 	initLED();
 	initPWM();
-	offRGB();
+
   // ...
- 
+	
   osKernelInitialize();                 // Initialize CMSIS-RTOS
   osThreadNew(tBrain, NULL, NULL);    // Create application main thread
 	osThreadNew(tMotorControl, NULL, NULL);    
-	osThreadNew(tLED, NULL, NULL);    
+	osThreadNew(tGreenLED, NULL, NULL);    
+	osThreadNew(tRedLED, NULL, NULL);    
 	osThreadNew(tAudio, NULL, NULL);    
   osKernelStart();                      // Start thread execution
+	
   for (;;) {}
 }
