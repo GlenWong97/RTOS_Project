@@ -30,7 +30,7 @@
 
 #define BAUD_RATE 9600
 #define UART_TX_PORTE22 22
-#define UART_RX_PORTE23 23
+#define UART_RX_PORTD2 2
 #define UART2_INT_PRIO PRESCALAR
 
 #define RED_LED 18 // PortB Pin 18
@@ -56,6 +56,11 @@
 #define GREEN_LED_7 10 // PortC Pin 10
 #define GREEN_LED_8 11 // PortC Pin 11
 
+#define FRONT_LEFT_MOTOR 30	 // PortE Pin 30
+#define FRONT_RIGHT_MOTOR 29 // PortE Pin 29
+#define BACK_LEFT_MOTOR 23 // PortE Pin 23
+#define BACK_RIGHT_MOTOR 22 // PortE Pin 22
+
 
 enum color_t{red, green, blue};
 enum led_state{led_on, led_off};
@@ -73,13 +78,13 @@ void initUART2(uint32_t baud_rate) {
 	uint32_t divisor, bus_clock;
 	
 	SIM->SCGC4 |= SIM_SCGC4_UART2_MASK; //supply power to UART2 module
-	SIM->SCGC5 |= SIM_SCGC5_PORTE_MASK; //supply power to PORTE 
+	SIM->SCGC5 |= SIM_SCGC5_PORTD_MASK; //supply power to PORTE 
 	
-	PORTE->PCR[UART_TX_PORTE22] &= ~PORT_PCR_MUX_MASK; //clear MUX bits for PORT E pin 22
-	PORTE->PCR[UART_TX_PORTE22] |= PORT_PCR_MUX(4); //set PORT E pin 22 to use UART2_TX module
+	//PORTE->PCR[UART_TX_PORTE22] &= ~PORT_PCR_MUX_MASK; //clear MUX bits for PORT E pin 22
+	//PORTE->PCR[UART_TX_PORTE22] |= PORT_PCR_MUX(4); //set PORT E pin 22 to use UART2_TX module
 	
-	PORTE->PCR[UART_RX_PORTE23] &= ~PORT_PCR_MUX_MASK; //clear MUX bits for PORT E pin 23
-	PORTE->PCR[UART_RX_PORTE23] |= PORT_PCR_MUX(4); //set PORT E pin 23 to use UART2_RX module
+	PORTD->PCR[UART_RX_PORTD2] &= ~PORT_PCR_MUX_MASK; //clear MUX bits for PORT E pin 23
+	PORTD->PCR[UART_RX_PORTD2] |= PORT_PCR_MUX(3); //set PORT E pin 23 to use UART2_RX module
 	
 	UART2->C2 &= ~((UART_C2_TE_MASK) | (UART_C2_RE_MASK)); //clear TE and RE bits for initialization
 	
@@ -408,12 +413,56 @@ void initPWM(void) {
 
 //----------------------------------------------------------------------------
 
+void initMotor(void) {
+	SIM->SCGC5 |= SIM_SCGC5_PORTE_MASK; //supply power to PORTE 
+	
+	PORTE->PCR[FRONT_LEFT_MOTOR] &= ~PORT_PCR_MUX_MASK; //clear MUX 
+	PORTE->PCR[FRONT_LEFT_MOTOR] |= PORT_PCR_MUX(3); //setting PortE pin30 to be PWN signal (TPM0_CH0)
+	
+	PORTE->PCR[FRONT_RIGHT_MOTOR] &= ~PORT_PCR_MUX_MASK; //clear MUX 
+	PORTB->PCR[FRONT_RIGHT_MOTOR] |= PORT_PCR_MUX(3); //setting PortE pin29 to be PWN signal (TPM0_CH0)
+	
+	PORTE->PCR[BACK_LEFT_MOTOR] &= ~PORT_PCR_MUX_MASK; //clear MUX 
+	PORTE->PCR[BACK_LEFT_MOTOR] |= PORT_PCR_MUX(3); //setting PortE pin23 to be PWN signal (TPM2_CH0)
+	
+	PORTE->PCR[BACK_RIGHT_MOTOR] &= ~PORT_PCR_MUX_MASK; //clear MUX 
+	PORTE->PCR[BACK_RIGHT_MOTOR] |= PORT_PCR_MUX(3); //setting PortE pin22 to be PWN signal (TPM2_CH0)
+	
+	PTE->PDDR |= (MASK(FRONT_LEFT_MOTOR) | MASK(FRONT_RIGHT_MOTOR) | MASK(BACK_LEFT_MOTOR) | MASK(BACK_RIGHT_MOTOR));
+	
+	SIM->SCGC6 |= SIM_SCGC6_TPM2_MASK; //enable clock gate for TPM2 module
+	SIM->SCGC6 |= SIM_SCGC6_TPM0_MASK; //enable clock gate for TPM0 module
+	
+	TPM0->MOD = calc_MOD(50, PRESCALAR);
+	TPM0_C0V = calc_MOD(50, PRESCALAR);
+	
+	TPM0->SC &= ~((TPM_SC_CMOD_MASK) | (TPM_SC_PS_MASK)); //clear PS(prescalar) and CMOD(counter mode) bits
+	TPM0->SC |= (TPM_SC_CMOD(1) | TPM_SC_PS(7)); //PS7 is set prescalar to 128, CMOD set LPTPM counter to increase on every LPTPM counter clock
+	TPM0->SC &= ~(TPM_SC_CPWMS_MASK); //clear CPWMS bit = LPTPM counter set to up-counting mode
+	
+	TPM0_C0SC &= ~((TPM_CnSC_ELSB_MASK) | (TPM_CnSC_ELSA_MASK) | (TPM_CnSC_MSB_MASK) | (TPM_CnSC_MSA_MASK)); //clear ELSB ELSA MSB MSA bits (M - mode, EL - Edge/Level)
+	TPM0_C0SC |= (TPM_CnSC_ELSB(1) | TPM_CnSC_MSB(1)); // Mode = Edge-aligned PWM, Configuration = High-true pulses
+	
+	TPM2->MOD = calc_MOD(50, PRESCALAR);
+	TPM2_C0V = calc_MOD(50, PRESCALAR);
+	
+	TPM2->SC &= ~((TPM_SC_CMOD_MASK) | (TPM_SC_PS_MASK)); //clear PS(prescalar) and CMOD(counter mode) bits
+	TPM2->SC |= (TPM_SC_CMOD(1) | TPM_SC_PS(7)); //PS7 is set prescalar to 128, CMOD set LPTPM counter to increase on every LPTPM counter clock
+	TPM2->SC &= ~(TPM_SC_CPWMS_MASK); //clear CPWMS bit = LPTPM counter set to up-counting mode
+	
+	TPM2_C0SC &= ~((TPM_CnSC_ELSB_MASK) | (TPM_CnSC_ELSA_MASK) | (TPM_CnSC_MSB_MASK) | (TPM_CnSC_MSA_MASK)); //clear ELSB ELSA MSB MSA bits (M - mode, EL - Edge/Level)
+	TPM2_C0SC |= (TPM_CnSC_ELSB(1) | TPM_CnSC_MSB(1)); // Mode = Edge-aligned PWM, Configuration = High-true pulses
+}
+
+
 void stop_moving() {
 	
 }
 
 void move_up() {
-	
+	PTE->PDDR |= (MASK(FRONT_LEFT_MOTOR) | MASK(FRONT_RIGHT_MOTOR) | MASK(BACK_LEFT_MOTOR) | MASK(BACK_RIGHT_MOTOR));
+	osDelay(500);
+	PTE->PDDR &= ~(MASK(FRONT_LEFT_MOTOR) | MASK(FRONT_RIGHT_MOTOR) | MASK(BACK_LEFT_MOTOR) | MASK(BACK_RIGHT_MOTOR));
 }
 
 void move_down() {
@@ -514,6 +563,7 @@ int main (void) {
 	initUART2(BAUD_RATE);
 	initLED();
 	initPWM();
+	initMotor();
 
   // ...
 	
