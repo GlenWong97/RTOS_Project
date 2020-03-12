@@ -6,14 +6,15 @@
 #include  CMSIS_device_header
 #include "cmsis_os2.h"
 #include <stdbool.h>
- 
+
+#define DATA_STATIONARY 0
 #define DATA_BLUETOOTH_SUCCESS 1
 #define DATA_BLUETOOTH_DISCONNECT 2
-#define UP 3
-#define DOWN 4
-#define LEFT 5 //curved left
-#define RIGHT 6 //curve right
-#define END 7
+#define DATA_UP 3
+#define DATA_DOWN 4
+#define DATA_LEFT 5 //curved left
+#define DATA_RIGHT 6 //curve right
+#define DATA_END 7
 
 #define PTB0_Pin 0
 #define PTB1_Pin 1
@@ -63,7 +64,8 @@ enum motion_state{stationary, up, down, left, right};
 volatile uint8_t rx_data;
 volatile bool is_connected = false;
 volatile bool has_started = false;
-volatile enum motion_state curr_motion_state = stationary;
+volatile enum motion_state curr_motion_state = up;
+volatile bool has_completed = false;
 
 
 /* Init UART2 */
@@ -343,6 +345,10 @@ void play_start_sound() {
 	play_G(1000);
 }
 
+void play_end_sound() {
+	
+}
+
 void play_constant_song() {
 	play_E(500);
 	play_D(500);
@@ -402,7 +408,25 @@ void initPWM(void) {
 
 //----------------------------------------------------------------------------
 
+void stop_moving() {
+	
+}
 
+void move_up() {
+	
+}
+
+void move_down() {
+	
+}
+
+void move_left() {
+	
+}
+
+void move_right() {
+	
+}
  
 /*----------------------------------------------------------------------------
  * Application main thread
@@ -410,28 +434,41 @@ void initPWM(void) {
 void tBrain (void *argument) {
 	for (;;) {		
 		/* Rx and Tx */
+		
 		if (rx_data == DATA_BLUETOOTH_SUCCESS) {
 			is_connected = true;
 		//delay(0x80000);
 		} else if (rx_data == DATA_BLUETOOTH_DISCONNECT) {
 			is_connected = false;
-		} else if (rx_data == UP) {
-			
-		} else if (rx_data == DOWN) {
-			
-		} else if (rx_data == LEFT) {
-			
-		} else if (rx_data == RIGHT) {
-			
-		} else if (rx_data == END) {
-			
+		} else if (rx_data == DATA_STATIONARY) {
+			//curr_motion_state = stationary;
+		} else if (rx_data == DATA_UP) {
+			curr_motion_state = up;
+		} else if (rx_data == DATA_DOWN) {
+			curr_motion_state = down;
+		} else if (rx_data == DATA_LEFT) {
+			curr_motion_state = left;
+		} else if (rx_data == DATA_RIGHT) {
+			curr_motion_state = right;
+		} else if (rx_data == DATA_END) {
+			has_completed = true;
 		}
 	}  
 }
 
 void tMotorControl (void *argument) {
 	for (;;) {
-		
+		if (curr_motion_state == stationary) {
+			stop_moving();
+		} else if (curr_motion_state == up) {
+			move_up();
+		} else if (curr_motion_state == down) {
+			move_down();
+		} else if (curr_motion_state == left) {
+			move_left();
+		} else if (curr_motion_state == right) {
+			move_right();
+		}
 	}
 }
 
