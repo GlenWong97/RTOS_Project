@@ -33,20 +33,8 @@
 #define UART_RX_PORTD2 2
 #define UART2_INT_PRIO PRESCALAR
 
-#define RED_LED 18 // PortB Pin 18
-#define GREEN_LED 19 // PortB Pin 19
-#define BLUE_LED 1 // PortD Pin 1
 #define MASK(x) (1 << (x))
-#define SW_POS 6
-
-#define RED_LED_1 5 // PortE Pin 5
-#define RED_LED_2 4 // PortE Pin 4
-#define RED_LED_3 3 // PortE Pin 3
-#define RED_LED_4 2 // PortE Pin 2
-#define RED_LED_5 11 // PortB Pin 11
-#define RED_LED_6 10 // PortB Pin 10
-#define RED_LED_7 9 // PortB Pin 9
-#define RED_LED_8 8 // PortB Pin 8
+#define RED_LEDS 1 // PortA Pin 1
 #define GREEN_LED_1 7 // PortC Pin 7
 #define GREEN_LED_2 0 // PortC Pin 0
 #define GREEN_LED_3 3 // PortC Pin 3
@@ -56,10 +44,10 @@
 #define GREEN_LED_7 10 // PortC Pin 10
 #define GREEN_LED_8 11 // PortC Pin 11
 
-#define FRONT_LEFT_MOTOR 30	 // PortE Pin 30
-#define FRONT_RIGHT_MOTOR 29 // PortE Pin 29
-#define BACK_LEFT_MOTOR 23 // PortE Pin 23
-#define BACK_RIGHT_MOTOR 22 // PortE Pin 22
+#define LEFT_MOTORS_FORWARD 30	 // PortE Pin 30
+#define LEFT_MOTORS_BACKWARD 29 // PortE Pin 29
+#define RIGHT_MOTORS_FORWARD 23 // PortE Pin 23
+#define RIGHT_MOTORS_BACKWARD 22 // PortE Pin 22
 
 
 enum color_t{red, green, blue};
@@ -130,51 +118,17 @@ void UART2_IRQHandler(void) {
 	
 }
 
-
-/* UART2 Transmit Poll */
-void UART2_Transmit_Poll(uint8_t data) {
-	while(!(UART2->S1 & UART_S1_TDRE_MASK));
-	UART2->D = data;
-}
-
-/* UART2 Receive Poll */
-uint8_t UART2_Receive_Poll(void) {
-	while(!(UART2->S1 & UART_S1_RDRF_MASK));
-	return (UART2->D);
-}
-
 /*-------- LED CODE -----------------------------------------------------------
 ------------------------------------------------------------------------------*/
 
 void initLED(void) {
 	
 	// Enable Clock to PORTB, PORTC and PORTE
-	SIM->SCGC5 |= ((SIM_SCGC5_PORTB_MASK) | (SIM_SCGC5_PORTC_MASK) | (SIM_SCGC5_PORTE_MASK));
+	SIM->SCGC5 |= ((SIM_SCGC5_PORTC_MASK) | (SIM_SCGC5_PORTA_MASK));
 	
-	// Configure MUX settings to make all 16 pins GPIO
-	PORTE->PCR[RED_LED_1] &= ~PORT_PCR_MUX_MASK;
-	PORTE->PCR[RED_LED_1] |= PORT_PCR_MUX(1);
-	
-	PORTE->PCR[RED_LED_2] &= ~PORT_PCR_MUX_MASK;
-	PORTE->PCR[RED_LED_2] |= PORT_PCR_MUX(1);
-	
-	PORTE->PCR[RED_LED_3] &= ~PORT_PCR_MUX_MASK;
-	PORTE->PCR[RED_LED_3] |= PORT_PCR_MUX(1);
-	
-	PORTE->PCR[RED_LED_4] &= ~PORT_PCR_MUX_MASK;
-	PORTE->PCR[RED_LED_4] |= PORT_PCR_MUX(1);
-	
-	PORTB->PCR[RED_LED_5] &= ~PORT_PCR_MUX_MASK;
-	PORTB->PCR[RED_LED_5] |= PORT_PCR_MUX(1);
-	
-	PORTB->PCR[RED_LED_6] &= ~PORT_PCR_MUX_MASK;
-	PORTB->PCR[RED_LED_6] |= PORT_PCR_MUX(1);
-	
-	PORTB->PCR[RED_LED_7] &= ~PORT_PCR_MUX_MASK;
-	PORTB->PCR[RED_LED_7] |= PORT_PCR_MUX(1);
-	
-	PORTB->PCR[RED_LED_8] &= ~PORT_PCR_MUX_MASK;
-	PORTB->PCR[RED_LED_8] |= PORT_PCR_MUX(1);
+	// Configure MUX settings to make all 9 pins GPIO
+	PORTA->PCR[RED_LEDS] &= ~PORT_PCR_MUX_MASK;
+	PORTA->PCR[RED_LEDS] |= PORT_PCR_MUX(1);
 	
 	PORTC->PCR[GREEN_LED_1] &= ~PORT_PCR_MUX_MASK;
 	PORTC->PCR[GREEN_LED_1] |= PORT_PCR_MUX(1);
@@ -200,10 +154,13 @@ void initLED(void) {
 	PORTC->PCR[GREEN_LED_8] &= ~PORT_PCR_MUX_MASK;
 	PORTC->PCR[GREEN_LED_8] |= PORT_PCR_MUX(1);
 	
-	// Set Data Direction Registers for PortB and PortD
-	PTB->PDDR |= (MASK(RED_LED_5) | MASK(RED_LED_6) | MASK(RED_LED_7) | MASK(RED_LED_8));
-	PTE->PDDR |= (MASK(RED_LED_1) | MASK(RED_LED_2) | MASK(RED_LED_3) | MASK(RED_LED_4));
+	// Set Data Direction Registers for PortA and PortC
+	PTA->PDDR |= MASK(RED_LEDS);
 	PTC->PDDR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
+	
+	// Switch off all LEDs
+	PTA->PCOR |= MASK(RED_LEDS);
+	PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
 }
 
 void single_green_led_on(int led_pos) {
@@ -260,20 +217,16 @@ void green_led_flashing() {
 }
 
 void all_red_led_flashing_stationary() {
-	PTB->PSOR |= (MASK(RED_LED_5) | MASK(RED_LED_6) | MASK(RED_LED_7) | MASK(RED_LED_8));
-	PTE->PSOR |= (MASK(RED_LED_1) | MASK(RED_LED_2) | MASK(RED_LED_3) | MASK(RED_LED_4));
+	PTA->PSOR |= MASK(RED_LEDS);
 	osDelay(250);
-	PTB->PCOR |= (MASK(RED_LED_5) | MASK(RED_LED_6) | MASK(RED_LED_7) | MASK(RED_LED_8));
-	PTE->PCOR |= (MASK(RED_LED_1) | MASK(RED_LED_2) | MASK(RED_LED_3) | MASK(RED_LED_4));
+	PTA->PCOR |= MASK(RED_LEDS);
 	osDelay(250);
 }
 
 void all_red_led_flashing_running() {
-	PTB->PSOR |= (MASK(RED_LED_5) | MASK(RED_LED_6) | MASK(RED_LED_7) | MASK(RED_LED_8));
-	PTE->PSOR |= (MASK(RED_LED_1) | MASK(RED_LED_2) | MASK(RED_LED_3) | MASK(RED_LED_4));
+	PTA->PSOR |= MASK(RED_LEDS);
 	osDelay(500);
-	PTB->PCOR |= (MASK(RED_LED_5) | MASK(RED_LED_6) | MASK(RED_LED_7) | MASK(RED_LED_8));
-	PTE->PCOR |= (MASK(RED_LED_1) | MASK(RED_LED_2) | MASK(RED_LED_3) | MASK(RED_LED_4));
+	PTA->PCOR |= MASK(RED_LEDS);
 	osDelay(500);
 }	
 
@@ -416,35 +369,34 @@ void initPWM(void) {
 void initMotor(void) {
 	SIM->SCGC5 |= SIM_SCGC5_PORTE_MASK; //supply power to PORTE 
 	
-	PORTE->PCR[FRONT_LEFT_MOTOR] &= ~PORT_PCR_MUX_MASK; //clear MUX 
-	PORTE->PCR[FRONT_LEFT_MOTOR] |= PORT_PCR_MUX(3); //setting PortE pin30 to be PWN signal (TPM0_CH0)
+	PORTE->PCR[LEFT_MOTORS_FORWARD] &= ~PORT_PCR_MUX_MASK; //clear MUX 
+	PORTE->PCR[LEFT_MOTORS_FORWARD] |= PORT_PCR_MUX(3); //setting PortE pin30 to be PWN signal (TPM0_CH3)
 	
-	PORTE->PCR[FRONT_RIGHT_MOTOR] &= ~PORT_PCR_MUX_MASK; //clear MUX 
-	PORTB->PCR[FRONT_RIGHT_MOTOR] |= PORT_PCR_MUX(3); //setting PortE pin29 to be PWN signal (TPM0_CH0)
+	PORTE->PCR[LEFT_MOTORS_BACKWARD] &= ~PORT_PCR_MUX_MASK; //clear MUX 
+	PORTE->PCR[LEFT_MOTORS_BACKWARD] |= PORT_PCR_MUX(3); //setting PortE pin29 to be PWN signal (TPM0_CH2)
 	
-	PORTE->PCR[BACK_LEFT_MOTOR] &= ~PORT_PCR_MUX_MASK; //clear MUX 
-	PORTE->PCR[BACK_LEFT_MOTOR] |= PORT_PCR_MUX(3); //setting PortE pin23 to be PWN signal (TPM2_CH0)
+	PORTE->PCR[RIGHT_MOTORS_FORWARD] &= ~PORT_PCR_MUX_MASK; //clear MUX 
+	PORTE->PCR[RIGHT_MOTORS_FORWARD] |= PORT_PCR_MUX(3); //setting PortE pin23 to be PWN signal (TPM2_CH1)
 	
-	PORTE->PCR[BACK_RIGHT_MOTOR] &= ~PORT_PCR_MUX_MASK; //clear MUX 
-	PORTE->PCR[BACK_RIGHT_MOTOR] |= PORT_PCR_MUX(3); //setting PortE pin22 to be PWN signal (TPM2_CH0)
+	PORTE->PCR[RIGHT_MOTORS_BACKWARD] &= ~PORT_PCR_MUX_MASK; //clear MUX 
+	PORTE->PCR[RIGHT_MOTORS_BACKWARD] |= PORT_PCR_MUX(3); //setting PortE pin22 to be PWN signal (TPM2_CH0)
 	
-	PTE->PDDR |= (MASK(FRONT_LEFT_MOTOR) | MASK(FRONT_RIGHT_MOTOR) | MASK(BACK_LEFT_MOTOR) | MASK(BACK_RIGHT_MOTOR));
+	//PTE->PDDR |= (MASK(LEFT_MOTORS_FORWARD) | MASK(RIGHT_MOTORS_FORWARD) | MASK(LEFT_MOTORS_BACKWARD) | MASK(RIGHT_MOTORS_BACKWARD));
 	
 	SIM->SCGC6 |= SIM_SCGC6_TPM2_MASK; //enable clock gate for TPM2 module
 	SIM->SCGC6 |= SIM_SCGC6_TPM0_MASK; //enable clock gate for TPM0 module
 	
-	TPM0->MOD = calc_MOD(50, PRESCALAR);
-	TPM0_C0V = calc_MOD(50, PRESCALAR);
+	SIM->SOPT2 &= ~SIM_SOPT2_TPMSRC_MASK; //clear TPMSRC bits
+	SIM->SOPT2 |= SIM_SOPT2_TPMSRC(1); //enable TPMSRC MCGFLLCLK clock or Multipurpose Clock Generator Frequency-Locked Loop Clock
 	
 	TPM0->SC &= ~((TPM_SC_CMOD_MASK) | (TPM_SC_PS_MASK)); //clear PS(prescalar) and CMOD(counter mode) bits
 	TPM0->SC |= (TPM_SC_CMOD(1) | TPM_SC_PS(7)); //PS7 is set prescalar to 128, CMOD set LPTPM counter to increase on every LPTPM counter clock
 	TPM0->SC &= ~(TPM_SC_CPWMS_MASK); //clear CPWMS bit = LPTPM counter set to up-counting mode
 	
-	TPM0_C0SC &= ~((TPM_CnSC_ELSB_MASK) | (TPM_CnSC_ELSA_MASK) | (TPM_CnSC_MSB_MASK) | (TPM_CnSC_MSA_MASK)); //clear ELSB ELSA MSB MSA bits (M - mode, EL - Edge/Level)
-	TPM0_C0SC |= (TPM_CnSC_ELSB(1) | TPM_CnSC_MSB(1)); // Mode = Edge-aligned PWM, Configuration = High-true pulses
-	
-	TPM2->MOD = calc_MOD(50, PRESCALAR);
-	TPM2_C0V = calc_MOD(50, PRESCALAR);
+	TPM0_C2SC &= ~((TPM_CnSC_ELSB_MASK) | (TPM_CnSC_ELSA_MASK) | (TPM_CnSC_MSB_MASK) | (TPM_CnSC_MSA_MASK)); //clear ELSB ELSA MSB MSA bits (M - mode, EL - Edge/Level)
+	TPM0_C2SC |= (TPM_CnSC_ELSB(1) | TPM_CnSC_MSB(1)); // Mode = Edge-aligned PWM, Configuration = High-true pulses
+	TPM0_C3SC &= ~((TPM_CnSC_ELSB_MASK) | (TPM_CnSC_ELSA_MASK) | (TPM_CnSC_MSB_MASK) | (TPM_CnSC_MSA_MASK)); //clear ELSB ELSA MSB MSA bits (M - mode, EL - Edge/Level)
+	TPM0_C3SC |= (TPM_CnSC_ELSB(1) | TPM_CnSC_MSB(1)); // Mode = Edge-aligned PWM, Configuration = High-true pulses
 	
 	TPM2->SC &= ~((TPM_SC_CMOD_MASK) | (TPM_SC_PS_MASK)); //clear PS(prescalar) and CMOD(counter mode) bits
 	TPM2->SC |= (TPM_SC_CMOD(1) | TPM_SC_PS(7)); //PS7 is set prescalar to 128, CMOD set LPTPM counter to increase on every LPTPM counter clock
@@ -452,29 +404,56 @@ void initMotor(void) {
 	
 	TPM2_C0SC &= ~((TPM_CnSC_ELSB_MASK) | (TPM_CnSC_ELSA_MASK) | (TPM_CnSC_MSB_MASK) | (TPM_CnSC_MSA_MASK)); //clear ELSB ELSA MSB MSA bits (M - mode, EL - Edge/Level)
 	TPM2_C0SC |= (TPM_CnSC_ELSB(1) | TPM_CnSC_MSB(1)); // Mode = Edge-aligned PWM, Configuration = High-true pulses
+	TPM2_C1SC &= ~((TPM_CnSC_ELSB_MASK) | (TPM_CnSC_ELSA_MASK) | (TPM_CnSC_MSB_MASK) | (TPM_CnSC_MSA_MASK)); //clear ELSB ELSA MSB MSA bits (M - mode, EL - Edge/Level)
+	TPM2_C1SC |= (TPM_CnSC_ELSB(1) | TPM_CnSC_MSB(1)); // Mode = Edge-aligned PWM, Configuration = High-true pulses
+	
+	TPM0->MOD = 0xFFFF; //left motors
+	TPM0_C3V = 0x0000; //left motors forward
+	TPM0_C2V = 0x0000; //left motors backward
+	
+	TPM2->MOD = 0xFFFF; //right motors
+	TPM2_C1V = 0x0000; //right motors forward
+	TPM2_C0V = 0x0000; //right motors backward
 }
 
 
 void stop_moving() {
-	
+	TPM0_C3V = 0x0000; //left motors forward
+	TPM0_C2V = 0x0000; //left motors backward
+	TPM2_C1V = 0x0000; //right motors forward
+	TPM2_C0V = 0x0000; //right motors backward
 }
 
 void move_up() {
-	PTE->PDDR |= (MASK(FRONT_LEFT_MOTOR) | MASK(FRONT_RIGHT_MOTOR) | MASK(BACK_LEFT_MOTOR) | MASK(BACK_RIGHT_MOTOR));
-	osDelay(500);
-	PTE->PDDR &= ~(MASK(FRONT_LEFT_MOTOR) | MASK(FRONT_RIGHT_MOTOR) | MASK(BACK_LEFT_MOTOR) | MASK(BACK_RIGHT_MOTOR));
+	TPM0_C3V = 0xFFFF; //left motors forward
+	TPM0_C2V = 0x0000; //left motors backward
+	TPM2_C1V = 0xFFFF; //right motors forward
+	TPM2_C0V = 0x0000; //right motors backward
+	osDelay(100);
 }
 
 void move_down() {
-	
+	TPM0_C3V = 0x0000; //left motors forward
+	TPM0_C2V = 0xFFFF; //left motors backward
+	TPM2_C1V = 0x0000; //right motors forward
+	TPM2_C0V = 0xFFFF; //right motors backward
+	osDelay(100);
 }
 
 void move_left() {
-	
+	TPM0_C3V = 0x7FFF; //left motors forward
+	TPM0_C2V = 0x0000; //left motors backward
+	TPM2_C1V = 0xFFFF; //right motors forward
+	TPM2_C0V = 0x0000; //right motors backward
+	osDelay(100);
 }
 
 void move_right() {
-	
+	TPM0_C3V = 0xFFFF; //left motors forward
+	TPM0_C2V = 0x0000; //left motors backward
+	TPM2_C1V = 0x7FFF; //right motors forward
+	TPM2_C0V = 0x0000; //right motors backward
+	osDelay(100);
 }
  
 /*----------------------------------------------------------------------------
@@ -560,6 +539,7 @@ int main (void) {
  
   // System Initialization
 	SystemCoreClockUpdate();
+	
 	initUART2(BAUD_RATE);
 	initLED();
 	initPWM();
@@ -572,7 +552,7 @@ int main (void) {
 	osThreadNew(tMotorControl, NULL, NULL);    
 	osThreadNew(tGreenLED, NULL, NULL);    
 	osThreadNew(tRedLED, NULL, NULL);    
-	osThreadNew(tAudio, NULL, NULL);    
+	//osThreadNew(tAudio, NULL, NULL);    
   osKernelStart();                      // Start thread execution
 	
   for (;;) {}
