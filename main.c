@@ -64,7 +64,7 @@ enum motion_state{stationary, up, down, left, right};
 volatile uint8_t rx_data;
 volatile bool is_connected = false;
 volatile bool has_started = false;
-volatile enum motion_state curr_motion_state = up;
+volatile enum motion_state curr_motion_state = stationary;
 volatile bool has_completed = false;
 
 
@@ -441,7 +441,7 @@ void tBrain (void *argument) {
 		} else if (rx_data == DATA_BLUETOOTH_DISCONNECT) {
 			is_connected = false;
 		} else if (rx_data == DATA_STATIONARY) {
-			//curr_motion_state = stationary;
+			curr_motion_state = stationary;
 		} else if (rx_data == DATA_UP) {
 			curr_motion_state = up;
 		} else if (rx_data == DATA_DOWN) {
