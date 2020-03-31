@@ -16,8 +16,8 @@
 #define DATA_RIGHT 6 //curve right
 #define DATA_END 7
 
-#define PTB0_Pin 0
-#define PTB1_Pin 1
+#define PWM_AUDIO_INPUT 0 //Port B Pin 0
+#define PTB1_Pin 1 //Port B Pin 1 (not used)
 #define CORE_CLK 48000000
 #define FREQ_C 262
 #define FREQ_D 294
@@ -27,11 +27,12 @@
 #define FREQ_A 440
 #define FREQ_B 494
 #define PRESCALAR 128
+#define CNV_DIVISOR 4 //for duty cycle = 1 / CNV_DIVISOR
 
 #define BAUD_RATE 9600
 #define UART_TX_PORTE22 22
 #define UART_RX_PORTD2 2
-#define UART2_INT_PRIO PRESCALAR
+//#define UART2_INT_PRIO PRESCALAR
 
 #define MASK(x) (1 << (x))
 #define RED_LEDS 1 // PortA Pin 1
@@ -49,6 +50,14 @@
 #define RIGHT_MOTORS_FORWARD 23 // PortE Pin 23
 #define RIGHT_MOTORS_BACKWARD 22 // PortE Pin 22
 
+#define GREEN_LED_FLAG_MOVING 0x1
+#define GREEN_LED_FLAG_CONNECTED 0x2
+
+#define RED_LED_FLAG_MOVING 0x1
+#define RED_LED_FLAG_CONNECTED 0x2
+
+#define AUDIO_FLAG_CONNECTED 0x1
+
 
 enum color_t{red, green, blue};
 enum led_state{led_on, led_off};
@@ -59,6 +68,10 @@ volatile bool is_connected = false;
 volatile bool has_started = false;
 volatile enum motion_state curr_motion_state = stationary;
 volatile bool has_completed = false;
+
+osThreadId_t greenLED_Id;
+osThreadId_t redLED_Id;
+osThreadId_t audio_Id;
 
 
 /* Init UART2 */
@@ -165,55 +178,54 @@ void initLED(void) {
 
 void single_green_led_on(int led_pos) {
 	switch (led_pos) {
-		case 1:
+		case 0:
 			PTC->PCOR |= (MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
 			PTC->PSOR |= (MASK(GREEN_LED_1));
 			break;
-		case 2:
+		case 1:
 			PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
 			PTC->PSOR |= (MASK(GREEN_LED_2));
 			break;
-		case 3:
+		case 2:
 			PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
 			PTC->PSOR |= (MASK(GREEN_LED_3));
 			break;
-		case 4:
+		case 3:
 			PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
 			PTC->PSOR |= (MASK(GREEN_LED_4));
 			break;
-		case 5:
+		case 4:
 			PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
 			PTC->PSOR |= (MASK(GREEN_LED_5));
 			break;
-		case 6:
+		case 5:
 			PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
 			PTC->PSOR |= (MASK(GREEN_LED_6));
 			break;
-		case 7:
+		case 6:
 			PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_8));
 			PTC->PSOR |= (MASK(GREEN_LED_7));
 			break;
-		case 8:
+		case 7:
 			PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7));
 			PTC->PSOR |= (MASK(GREEN_LED_8));
 			break;	
 	}
 }
 
-void all_green_led_on() {
+void green_led_blink_twice() {
 	PTC->PSOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
+	osDelay(250);
+	PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
+	osDelay(250);
+	PTC->PSOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
+	osDelay(250);
+	PTC->PCOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
+	osDelay(250);
 }
 
-void green_led_flashing() {
-	int green_led_pos = 1;
-	while (curr_motion_state != stationary) {
-		single_green_led_on(green_led_pos);
-		osDelay(250);
-		green_led_pos++;
-		if (green_led_pos >= 9) {
-			break;
-		}
-	}
+void all_green_led_on() {
+	PTC->PSOR |= (MASK(GREEN_LED_1) | MASK(GREEN_LED_2) | MASK(GREEN_LED_3) | MASK(GREEN_LED_4) | MASK(GREEN_LED_5) | MASK(GREEN_LED_6) | MASK(GREEN_LED_7) | MASK(GREEN_LED_8));
 }
 
 void all_red_led_flashing_stationary() {
@@ -239,111 +251,171 @@ int calc_MOD(int freq, int prescaler) {
 	return num_clk_cycles;
 }
 
-void off_sound() {
+void off_sound(int time_delay) {
 	TPM1->MOD = calc_MOD(0, 128);
 	TPM1_C0V = calc_MOD(0, 128);
+	osDelay(time_delay);
 }
 
 void sound_break() {
-	off_sound();
-	osDelay(50);
+	off_sound(10);
 }
 
 void play_C(int time_delay) {
 	TPM1->MOD = calc_MOD(FREQ_C, PRESCALAR);
-	TPM1_C0V = calc_MOD(FREQ_C, PRESCALAR) / 2;
+	TPM1_C0V = calc_MOD(FREQ_C, PRESCALAR) / CNV_DIVISOR;
 	osDelay(time_delay);
 	sound_break();
 }
 
 void play_D(int time_delay) {
 	TPM1->MOD = calc_MOD(FREQ_D, PRESCALAR);
-	TPM1_C0V = calc_MOD(FREQ_D, PRESCALAR) / 2;
+	TPM1_C0V = calc_MOD(FREQ_D, PRESCALAR) / CNV_DIVISOR;
 	osDelay(time_delay);
 	sound_break();
 }
 
 void play_E(int time_delay) {
 	TPM1->MOD = calc_MOD(FREQ_E, PRESCALAR);
-	TPM1_C0V = calc_MOD(FREQ_E, PRESCALAR) / 2;
+	TPM1_C0V = calc_MOD(FREQ_E, PRESCALAR) / CNV_DIVISOR;
 	osDelay(time_delay);
 	sound_break();
 }
 
 void play_F(int time_delay) {
 	TPM1->MOD = calc_MOD(FREQ_F, PRESCALAR);
-	TPM1_C0V = calc_MOD(FREQ_F, PRESCALAR) / 2;
+	TPM1_C0V = calc_MOD(FREQ_F, PRESCALAR) / CNV_DIVISOR;
 	osDelay(time_delay);
 	sound_break();
 }
 
 void play_G(int time_delay) {
 	TPM1->MOD = calc_MOD(FREQ_G, PRESCALAR);
-	TPM1_C0V = calc_MOD(FREQ_G, PRESCALAR) / 2;
+	TPM1_C0V = calc_MOD(FREQ_G, PRESCALAR) / CNV_DIVISOR;
 	osDelay(time_delay);
 	sound_break();
 }
 
 void play_A(int time_delay) {
 	TPM1->MOD = calc_MOD(FREQ_A, PRESCALAR);
-	TPM1_C0V = calc_MOD(FREQ_A, PRESCALAR) / 2;
+	TPM1_C0V = calc_MOD(FREQ_A, PRESCALAR) / CNV_DIVISOR;
 	osDelay(time_delay);
 	sound_break();
 }
 
 void play_B(int time_delay) {
 	TPM1->MOD = calc_MOD(FREQ_B, PRESCALAR);
-	TPM1_C0V = calc_MOD(FREQ_B, PRESCALAR) / 2;
+	TPM1_C0V = calc_MOD(FREQ_B, PRESCALAR) / CNV_DIVISOR;
 	osDelay(time_delay);
 	sound_break();
 }
 
 void play_start_sound() {
-	play_C(1000);
-	play_G(1000);
+	play_E(300);
+	play_E(300);
+	play_C(600);
+	play_E(300);
+	play_E(300);
+	play_C(2000);
+	off_sound(2000);
 }
 
 void play_end_sound() {
 	
 }
 
-void play_constant_song() {
-	play_E(500);
-	play_D(500);
-	play_C(500);
-	play_D(500);
-	play_E(500);
-	play_E(500);
-	play_E(1000);
-	play_D(500);
-	play_D(500);
-	play_D(1000);
-	play_E(500);
-	play_E(500);
-	play_E(1000);
-	play_E(500);
-	play_D(500);
-	play_C(500);
-	play_D(500);
-	play_E(500);
-	play_E(500);
-	play_E(1000);
-	play_D(500);
-	play_D(500);
-	play_E(500);
-	play_D(500);
-	play_C(2000);
+void play_constant_song(int count) {
+	// Mary had a litte lamb
+	switch (count) {
+		case 0:
+			play_E(500);
+			break;
+		case 1:
+			play_D(500);
+			break;
+		case 2:
+			play_C(500);
+			break;
+		case 3:
+			play_D(500);
+			break;
+		case 4:
+			play_E(500);
+			break;
+		case 5:
+			play_E(500);
+			break;
+		case 6:
+			play_E(1000);
+			break;
+		case 7:
+			play_D(500);
+			break;
+		case 8:
+			play_D(500);
+			break;
+		case 9:
+			play_D(1000);
+			break;
+		case 10:
+			play_E(500);
+			break;
+		case 11:
+			play_E(500);
+			break;
+		case 12:
+			play_E(1000);
+			break;
+		case 13:
+			play_E(500);
+			break;
+		case 14:
+			play_D(500);
+			break;
+		case 15:
+			play_C(500);
+			break;
+		case 16:
+			play_D(500);
+			break;
+		case 17:
+			play_E(500);
+			break;
+		case 18:
+			play_E(500);
+			break;
+		case 19:
+			play_E(1000);
+			break;
+		case 20:
+			play_D(500);
+			break;
+		case 21:
+			play_D(500);
+			break;
+		case 22:
+			play_E(500);
+			break;
+		case 23:
+			play_D(500);
+			break;
+		case 24:
+			play_C(2000);
+			break;
+	}
 }
 
 /* initPWM() */
 void initPWM(void) {
 	SIM_SCGC5 |= SIM_SCGC5_PORTB_MASK; //enable clock gate for port b
 	
-	PORTB->PCR[PTB0_Pin] &= ~PORT_PCR_MUX_MASK; //clear MUX 
-	PORTB->PCR[PTB0_Pin] |= PORT_PCR_MUX(3); //setting PTB0 pin to be PWN signal (TPM1_CH0)
+	PORTB->PCR[PWM_AUDIO_INPUT] &= ~PORT_PCR_MUX_MASK; //clear MUX 
+	PORTB->PCR[PWM_AUDIO_INPUT] |= PORT_PCR_MUX(3); //setting PTB0 pin to be PWN signal (TPM1_CH0)
 	
+	/*
 	PORTB->PCR[PTB1_Pin] &= ~PORT_PCR_MUX_MASK; //clear MUX bits
 	PORTB->PCR[PTB1_Pin] |= PORT_PCR_MUX(3); //setting PTB1 pin to be PWN signal (TPM1_CH1)
+	*/
 	
 	SIM->SCGC6 |= SIM_SCGC6_TPM1_MASK; //enable clock gate for TPM1 module
 	
@@ -352,8 +424,8 @@ void initPWM(void) {
 	
 	//TPM1->MOD = 0b0001110101001100;
 	//TPM1_C0V = 0b0001110101001100;
-	TPM1->MOD = calc_MOD(50, PRESCALAR);
-	TPM1_C0V = calc_MOD(50, PRESCALAR);
+	TPM1->MOD = calc_MOD(0, PRESCALAR);
+	TPM1_C0V = calc_MOD(0, PRESCALAR);
 	
 	TPM1->SC &= ~((TPM_SC_CMOD_MASK) | (TPM_SC_PS_MASK)); //clear PS(prescalar) and CMOD(counter mode) bits
 	TPM1->SC |= (TPM_SC_CMOD(1) | TPM_SC_PS(7)); //PS7 is set prescalar to 128, CMOD set LPTPM counter to increase on every LPTPM counter clock
@@ -422,6 +494,7 @@ void stop_moving() {
 	TPM0_C2V = 0x0000; //left motors backward
 	TPM2_C1V = 0x0000; //right motors forward
 	TPM2_C0V = 0x0000; //right motors backward
+	osDelay(100);
 }
 
 void move_up() {
@@ -441,7 +514,7 @@ void move_down() {
 }
 
 void move_left() {
-	TPM0_C3V = 0x7FFF; //left motors forward
+	TPM0_C3V = 0x3FFF; //left motors forward
 	TPM0_C2V = 0x0000; //left motors backward
 	TPM2_C1V = 0xFFFF; //right motors forward
 	TPM2_C0V = 0x0000; //right motors backward
@@ -451,7 +524,7 @@ void move_left() {
 void move_right() {
 	TPM0_C3V = 0xFFFF; //left motors forward
 	TPM0_C2V = 0x0000; //left motors backward
-	TPM2_C1V = 0x7FFF; //right motors forward
+	TPM2_C1V = 0x3FFF; //right motors forward
 	TPM2_C0V = 0x0000; //right motors backward
 	osDelay(100);
 }
@@ -465,19 +538,25 @@ void tBrain (void *argument) {
 		
 		if (rx_data == DATA_BLUETOOTH_SUCCESS) {
 			is_connected = true;
-		//delay(0x80000);
+			osThreadFlagsSet(redLED_Id, RED_LED_FLAG_CONNECTED);
+			osThreadFlagsSet(greenLED_Id, GREEN_LED_FLAG_CONNECTED);
+			osThreadFlagsSet(audio_Id, AUDIO_FLAG_CONNECTED);
 		} else if (rx_data == DATA_BLUETOOTH_DISCONNECT) {
 			is_connected = false;
 		} else if (rx_data == DATA_STATIONARY) {
 			curr_motion_state = stationary;
 		} else if (rx_data == DATA_UP) {
 			curr_motion_state = up;
+			osThreadFlagsSet(greenLED_Id, GREEN_LED_FLAG_MOVING);
 		} else if (rx_data == DATA_DOWN) {
 			curr_motion_state = down;
+			osThreadFlagsSet(greenLED_Id, GREEN_LED_FLAG_MOVING);
 		} else if (rx_data == DATA_LEFT) {
 			curr_motion_state = left;
+			osThreadFlagsSet(greenLED_Id, GREEN_LED_FLAG_MOVING);
 		} else if (rx_data == DATA_RIGHT) {
 			curr_motion_state = right;
+			osThreadFlagsSet(greenLED_Id, GREEN_LED_FLAG_MOVING);
 		} else if (rx_data == DATA_END) {
 			has_completed = true;
 		}
@@ -501,16 +580,23 @@ void tMotorControl (void *argument) {
 }
 
 void tGreenLED (void *argument) {
+	osThreadFlagsWait(GREEN_LED_FLAG_CONNECTED, osFlagsWaitAny, osWaitForever);
+	green_led_blink_twice();
 	for (;;) {
-		if (curr_motion_state == stationary) {
-			all_green_led_on();
-		} else if (curr_motion_state != stationary) {
-			green_led_flashing();
+		all_green_led_on();
+		osThreadFlagsWait(GREEN_LED_FLAG_MOVING, osFlagsWaitAny, osWaitForever);
+		int count = 0;
+		while (curr_motion_state != stationary) {
+			single_green_led_on(count);
+			count++;
+			count %= 8;
+			osDelay(250);
 		}
 	}
 }
 
 void tRedLED (void *argument) {
+	osThreadFlagsWait(RED_LED_FLAG_CONNECTED, osFlagsWaitAny, osWaitForever);
 	for (;;) {
 		if (curr_motion_state == stationary) {
 			all_red_led_flashing_stationary();
@@ -521,16 +607,18 @@ void tRedLED (void *argument) {
 }
 
 void tAudio (void *argument) {
-	for (;;) {
-		if (is_connected == true) {
-			if (has_started == false) {
-				play_start_sound();
-				has_started = true;
-			}
-			play_constant_song();			
-		} 
-		if (is_connected == false) {
-			has_started = false;
+	osThreadFlagsWait(AUDIO_FLAG_CONNECTED, osFlagsWaitAny, osWaitForever);
+	play_start_sound();
+	int total_notes_in_constant_song = 25;
+	int count = 0;
+	for (;;) {	
+		if (has_completed == false) {
+			play_constant_song(count);
+			count++;
+			count %= total_notes_in_constant_song;
+		} else {
+			play_end_sound();
+			break; 
 		}
 	}
 }
@@ -544,16 +632,17 @@ int main (void) {
 	initLED();
 	initPWM();
 	initMotor();
-
   // ...
 	
   osKernelInitialize();                 // Initialize CMSIS-RTOS
   osThreadNew(tBrain, NULL, NULL);    // Create application main thread
 	osThreadNew(tMotorControl, NULL, NULL);    
-	osThreadNew(tGreenLED, NULL, NULL);    
-	osThreadNew(tRedLED, NULL, NULL);    
-	//osThreadNew(tAudio, NULL, NULL);    
+	greenLED_Id = osThreadNew(tGreenLED, NULL, NULL);    
+	redLED_Id = osThreadNew(tRedLED, NULL, NULL);    
+	audio_Id = osThreadNew(tAudio, NULL, NULL);    
   osKernelStart();                      // Start thread execution
 	
-  for (;;) {}
+  for (;;) {
+	}
+	
 }
