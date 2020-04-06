@@ -20,19 +20,25 @@
 #define PTB1_Pin 1 //Port B Pin 1 (not used)
 #define CORE_CLK 48000000
 #define FREQ_C 262
+#define FREQ_Csharp 277 
 #define FREQ_D 294
+#define FREQ_Dsharp 311
 #define FREQ_E 330
 #define FREQ_F 349
+#define FREQ_Fsharp 370
 #define FREQ_G 392
+#define FREQ_Gsharp 415
 #define FREQ_A 440
+#define FREQ_Asharp 466
 #define FREQ_B 494
+#define FREQ_HIGHC 523
+#define FREQ_HIGHD 587
 #define PRESCALAR 128
 #define CNV_DIVISOR 4 //for duty cycle = 1 / CNV_DIVISOR
 
 #define BAUD_RATE 9600
 #define UART_TX_PORTE22 22
 #define UART_RX_PORTD2 2
-//#define UART2_INT_PRIO PRESCALAR
 
 #define MASK(x) (1 << (x))
 #define RED_LEDS 1 // PortA Pin 1
@@ -58,20 +64,31 @@
 
 #define AUDIO_FLAG_CONNECTED 0x1
 
+#define MOTOR_FLAG_STOP 0x1
+#define MOTOR_FLAG_UP 0x2
+#define MOTOR_FLAG_DOWN 0x4
+#define MOTOR_FLAG_LEFT 0x8
+#define MOTOR_FLAG_RIGHT 0x10
+#define MOTOR_FLAG_MOVING 0b11110
+#define MOTOR_MSG_COUNT 1
+
 
 enum color_t{red, green, blue};
 enum led_state{led_on, led_off};
-enum motion_state{stationary, up, down, left, right};
+enum motion_state{stationary, moving};
 
 volatile uint8_t rx_data;
-volatile bool is_connected = false;
-volatile bool has_started = false;
 volatile enum motion_state curr_motion_state = stationary;
 volatile bool has_completed = false;
 
 osThreadId_t greenLED_Id;
 osThreadId_t redLED_Id;
 osThreadId_t audio_Id;
+osMessageQueueId_t motor_Msg;
+
+typedef struct {
+	uint8_t cmd;
+} motorDataPkt;
 
 
 /* Init UART2 */
@@ -258,7 +275,7 @@ void off_sound(int time_delay) {
 }
 
 void sound_break() {
-	off_sound(10);
+	off_sound(5);
 }
 
 void play_C(int time_delay) {
@@ -268,9 +285,23 @@ void play_C(int time_delay) {
 	sound_break();
 }
 
+void play_Csharp(int time_delay) {
+	TPM1->MOD = calc_MOD(FREQ_Csharp, PRESCALAR);
+	TPM1_C0V = calc_MOD(FREQ_Csharp, PRESCALAR) / CNV_DIVISOR;
+	osDelay(time_delay);
+	sound_break();
+}
+
 void play_D(int time_delay) {
 	TPM1->MOD = calc_MOD(FREQ_D, PRESCALAR);
 	TPM1_C0V = calc_MOD(FREQ_D, PRESCALAR) / CNV_DIVISOR;
+	osDelay(time_delay);
+	sound_break();
+}
+
+void play_Dsharp(int time_delay) {
+	TPM1->MOD = calc_MOD(FREQ_Dsharp, PRESCALAR);
+	TPM1_C0V = calc_MOD(FREQ_Dsharp, PRESCALAR) / CNV_DIVISOR;
 	osDelay(time_delay);
 	sound_break();
 }
@@ -289,9 +320,23 @@ void play_F(int time_delay) {
 	sound_break();
 }
 
+void play_Fsharp(int time_delay) {
+	TPM1->MOD = calc_MOD(FREQ_Fsharp, PRESCALAR);
+	TPM1_C0V = calc_MOD(FREQ_Fsharp, PRESCALAR) / CNV_DIVISOR;
+	osDelay(time_delay);
+	sound_break();
+}
+
 void play_G(int time_delay) {
 	TPM1->MOD = calc_MOD(FREQ_G, PRESCALAR);
 	TPM1_C0V = calc_MOD(FREQ_G, PRESCALAR) / CNV_DIVISOR;
+	osDelay(time_delay);
+	sound_break();
+}
+
+void play_Gsharp(int time_delay) {
+	TPM1->MOD = calc_MOD(FREQ_Gsharp, PRESCALAR);
+	TPM1_C0V = calc_MOD(FREQ_Gsharp, PRESCALAR) / CNV_DIVISOR;
 	osDelay(time_delay);
 	sound_break();
 }
@@ -303,9 +348,30 @@ void play_A(int time_delay) {
 	sound_break();
 }
 
+void play_Asharp(int time_delay) {
+	TPM1->MOD = calc_MOD(FREQ_Asharp, PRESCALAR);
+	TPM1_C0V = calc_MOD(FREQ_Asharp, PRESCALAR) / CNV_DIVISOR;
+	osDelay(time_delay);
+	sound_break();
+}
+
 void play_B(int time_delay) {
 	TPM1->MOD = calc_MOD(FREQ_B, PRESCALAR);
 	TPM1_C0V = calc_MOD(FREQ_B, PRESCALAR) / CNV_DIVISOR;
+	osDelay(time_delay);
+	sound_break();
+}
+
+void play_highC(int time_delay) {
+	TPM1->MOD = calc_MOD(FREQ_HIGHC, PRESCALAR);
+	TPM1_C0V = calc_MOD(FREQ_HIGHC, PRESCALAR) / CNV_DIVISOR;
+	osDelay(time_delay);
+	sound_break();
+}
+
+void play_highD(int time_delay) {
+	TPM1->MOD = calc_MOD(FREQ_HIGHD, PRESCALAR);
+	TPM1_C0V = calc_MOD(FREQ_HIGHD, PRESCALAR) / CNV_DIVISOR;
 	osDelay(time_delay);
 	sound_break();
 }
@@ -321,6 +387,49 @@ void play_start_sound() {
 }
 
 void play_end_sound() {
+	int semiquaver = 138;
+	int crotchet = semiquaver * 4;
+	int quaver = 2 * semiquaver;
+	int triplet = semiquaver / 3 * 4;
+	
+	play_C(quaver);
+	play_F(quaver);
+	play_G(quaver);
+	play_A(crotchet);
+	play_A(crotchet);
+	play_A(quaver);
+	play_G(quaver);
+	play_F(quaver);
+	play_E(quaver);
+	play_F(crotchet);
+	play_F(crotchet);
+	play_F(quaver);
+	play_E(quaver);
+	play_D(quaver);
+	play_C(quaver);
+	play_D(crotchet);
+	play_C(crotchet + quaver);
+	play_F(quaver);
+	play_G(quaver);
+	play_F(quaver);
+	play_E(2*crotchet + quaver);
+	play_C(quaver);
+	play_E(quaver);
+	play_F(quaver);
+	play_G(crotchet);
+	play_E(crotchet);
+	play_F(crotchet);
+	play_G(crotchet);
+	play_A(triplet * 2);
+	play_highD(triplet);
+	play_highC(3*crotchet);
+	play_A(triplet * 2);
+	play_A(triplet);
+	play_C(crotchet + quaver);
+	play_C(quaver);
+	play_E(quaver);
+	play_G(quaver);
+	play_F(4*crotchet);
 	
 }
 
@@ -412,18 +521,11 @@ void initPWM(void) {
 	PORTB->PCR[PWM_AUDIO_INPUT] &= ~PORT_PCR_MUX_MASK; //clear MUX 
 	PORTB->PCR[PWM_AUDIO_INPUT] |= PORT_PCR_MUX(3); //setting PTB0 pin to be PWN signal (TPM1_CH0)
 	
-	/*
-	PORTB->PCR[PTB1_Pin] &= ~PORT_PCR_MUX_MASK; //clear MUX bits
-	PORTB->PCR[PTB1_Pin] |= PORT_PCR_MUX(3); //setting PTB1 pin to be PWN signal (TPM1_CH1)
-	*/
-	
 	SIM->SCGC6 |= SIM_SCGC6_TPM1_MASK; //enable clock gate for TPM1 module
 	
 	SIM->SOPT2 &= ~SIM_SOPT2_TPMSRC_MASK; //clear TPMSRC bits
 	SIM->SOPT2 |= SIM_SOPT2_TPMSRC(1); //enable TPMSRC MCGFLLCLK clock or Multipurpose Clock Generator Frequency-Locked Loop Clock
 	
-	//TPM1->MOD = 0b0001110101001100;
-	//TPM1_C0V = 0b0001110101001100;
 	TPM1->MOD = calc_MOD(0, PRESCALAR);
 	TPM1_C0V = calc_MOD(0, PRESCALAR);
 	
@@ -452,8 +554,6 @@ void initMotor(void) {
 	
 	PORTE->PCR[RIGHT_MOTORS_BACKWARD] &= ~PORT_PCR_MUX_MASK; //clear MUX 
 	PORTE->PCR[RIGHT_MOTORS_BACKWARD] |= PORT_PCR_MUX(3); //setting PortE pin22 to be PWN signal (TPM2_CH0)
-	
-	//PTE->PDDR |= (MASK(LEFT_MOTORS_FORWARD) | MASK(RIGHT_MOTORS_FORWARD) | MASK(LEFT_MOTORS_BACKWARD) | MASK(RIGHT_MOTORS_BACKWARD));
 	
 	SIM->SCGC6 |= SIM_SCGC6_TPM2_MASK; //enable clock gate for TPM2 module
 	SIM->SCGC6 |= SIM_SCGC6_TPM0_MASK; //enable clock gate for TPM0 module
@@ -494,7 +594,6 @@ void stop_moving() {
 	TPM0_C2V = 0x0000; //left motors backward
 	TPM2_C1V = 0x0000; //right motors forward
 	TPM2_C0V = 0x0000; //right motors backward
-	osDelay(100);
 }
 
 void move_up() {
@@ -502,7 +601,6 @@ void move_up() {
 	TPM0_C2V = 0x0000; //left motors backward
 	TPM2_C1V = 0xFFFF; //right motors forward
 	TPM2_C0V = 0x0000; //right motors backward
-	osDelay(100);
 }
 
 void move_down() {
@@ -510,53 +608,57 @@ void move_down() {
 	TPM0_C2V = 0xFFFF; //left motors backward
 	TPM2_C1V = 0x0000; //right motors forward
 	TPM2_C0V = 0xFFFF; //right motors backward
-	osDelay(100);
 }
 
 void move_left() {
-	TPM0_C3V = 0x3FFF; //left motors forward
+	TPM0_C3V = 0x1FFF; //left motors forward
 	TPM0_C2V = 0x0000; //left motors backward
 	TPM2_C1V = 0xFFFF; //right motors forward
 	TPM2_C0V = 0x0000; //right motors backward
-	osDelay(100);
 }
 
 void move_right() {
 	TPM0_C3V = 0xFFFF; //left motors forward
 	TPM0_C2V = 0x0000; //left motors backward
-	TPM2_C1V = 0x3FFF; //right motors forward
+	TPM2_C1V = 0x1FFF; //right motors forward
 	TPM2_C0V = 0x0000; //right motors backward
-	osDelay(100);
 }
  
 /*----------------------------------------------------------------------------
  * Application main thread
  *---------------------------------------------------------------------------*/
 void tBrain (void *argument) {
+	motorDataPkt motorData;
 	for (;;) {		
 		/* Rx and Tx */
-		
 		if (rx_data == DATA_BLUETOOTH_SUCCESS) {
-			is_connected = true;
 			osThreadFlagsSet(redLED_Id, RED_LED_FLAG_CONNECTED);
 			osThreadFlagsSet(greenLED_Id, GREEN_LED_FLAG_CONNECTED);
 			osThreadFlagsSet(audio_Id, AUDIO_FLAG_CONNECTED);
-		} else if (rx_data == DATA_BLUETOOTH_DISCONNECT) {
-			is_connected = false;
 		} else if (rx_data == DATA_STATIONARY) {
 			curr_motion_state = stationary;
+			motorData.cmd = MOTOR_FLAG_STOP;
+			osMessageQueuePut(motor_Msg, &motorData, NULL, 0);
 		} else if (rx_data == DATA_UP) {
-			curr_motion_state = up;
+			curr_motion_state = moving;
 			osThreadFlagsSet(greenLED_Id, GREEN_LED_FLAG_MOVING);
+			motorData.cmd = MOTOR_FLAG_UP;
+			osMessageQueuePut(motor_Msg, &motorData, NULL, 0);
 		} else if (rx_data == DATA_DOWN) {
-			curr_motion_state = down;
+			curr_motion_state = moving;
 			osThreadFlagsSet(greenLED_Id, GREEN_LED_FLAG_MOVING);
+			motorData.cmd = MOTOR_FLAG_DOWN;
+			osMessageQueuePut(motor_Msg, &motorData, NULL, 0);
 		} else if (rx_data == DATA_LEFT) {
-			curr_motion_state = left;
+			curr_motion_state = moving;
 			osThreadFlagsSet(greenLED_Id, GREEN_LED_FLAG_MOVING);
+			motorData.cmd = MOTOR_FLAG_LEFT;
+			osMessageQueuePut(motor_Msg, &motorData, NULL, 0);
 		} else if (rx_data == DATA_RIGHT) {
-			curr_motion_state = right;
+			curr_motion_state = moving;
 			osThreadFlagsSet(greenLED_Id, GREEN_LED_FLAG_MOVING);
+			motorData.cmd = MOTOR_FLAG_RIGHT;
+			osMessageQueuePut(motor_Msg, &motorData, NULL, 0);
 		} else if (rx_data == DATA_END) {
 			has_completed = true;
 		}
@@ -564,16 +666,18 @@ void tBrain (void *argument) {
 }
 
 void tMotorControl (void *argument) {
+	motorDataPkt motorRxData;
 	for (;;) {
-		if (curr_motion_state == stationary) {
+		osMessageQueueGet(motor_Msg, &motorRxData, NULL, osWaitForever);
+		if (motorRxData.cmd == MOTOR_FLAG_STOP) {
 			stop_moving();
-		} else if (curr_motion_state == up) {
+		} else if (motorRxData.cmd == MOTOR_FLAG_UP) {
 			move_up();
-		} else if (curr_motion_state == down) {
+		} else if (motorRxData.cmd == MOTOR_FLAG_DOWN) {
 			move_down();
-		} else if (curr_motion_state == left) {
+		} else if (motorRxData.cmd == MOTOR_FLAG_LEFT) {
 			move_left();
-		} else if (curr_motion_state == right) {
+		} else if (motorRxData.cmd == MOTOR_FLAG_RIGHT) {
 			move_right();
 		}
 	}
@@ -621,6 +725,7 @@ void tAudio (void *argument) {
 			break; 
 		}
 	}
+	
 }
  
 int main (void) {
@@ -637,6 +742,7 @@ int main (void) {
   osKernelInitialize();                 // Initialize CMSIS-RTOS
   osThreadNew(tBrain, NULL, NULL);    // Create application main thread
 	osThreadNew(tMotorControl, NULL, NULL);    
+	motor_Msg = osMessageQueueNew(MOTOR_MSG_COUNT, sizeof(motorDataPkt), NULL);
 	greenLED_Id = osThreadNew(tGreenLED, NULL, NULL);    
 	redLED_Id = osThreadNew(tRedLED, NULL, NULL);    
 	audio_Id = osThreadNew(tAudio, NULL, NULL);    
