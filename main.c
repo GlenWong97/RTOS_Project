@@ -98,6 +98,7 @@ void initUART2(uint32_t baud_rate) {
 	SIM->SCGC4 |= SIM_SCGC4_UART2_MASK; //supply power to UART2 module
 	SIM->SCGC5 |= SIM_SCGC5_PORTD_MASK; //supply power to PORTE 
 	
+	// UART TX not in use
 	//PORTE->PCR[UART_TX_PORTE22] &= ~PORT_PCR_MUX_MASK; //clear MUX bits for PORT E pin 22
 	//PORTE->PCR[UART_TX_PORTE22] |= PORT_PCR_MUX(4); //set PORT E pin 22 to use UART2_TX module
 	
